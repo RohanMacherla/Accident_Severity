@@ -1,0 +1,394 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Emergency Alert Banner -->
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <strong>Emergency Alert System Active</strong> - Real-time monitoring of accident-prone areas and emergency services.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+
+    <div class="row">
+        <!-- Emergency Services Map -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Emergency Services Map</h5>
+                    <div id="emergencyMap" style="height: 500px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Quick Actions</h5>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-danger" onclick="callEmergency('911')">
+                            <i class="fas fa-phone"></i> Call 911
+                        </button>
+                        <button class="btn btn-warning" onclick="callEmergency('police')">
+                            <i class="fas fa-shield-alt"></i> Call Police
+                        </button>
+                        <button class="btn btn-info" onclick="callEmergency('ambulance')">
+                            <i class="fas fa-ambulance"></i> Call Ambulance
+                        </button>
+                        <button class="btn btn-success" onclick="callEmergency('fire')">
+                            <i class="fas fa-fire"></i> Call Fire Department
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Alerts -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Active Alerts</h5>
+                    <div id="activeAlerts" class="list-group">
+                        <div class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">Loading alerts...</h6>
+                                <small class="text-muted">Just now</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Emergency Services List -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Nearby Emergency Services</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Service</th>
+                                    <th>Distance</th>
+                                    <th>Status</th>
+                                    <th>Response Time</th>
+                                    <th>Contact</th>
+                                </tr>
+                            </thead>
+                            <tbody id="emergencyServices">
+                                <tr>
+                                    <td colspan="5" class="text-center">Loading emergency services...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Nearby Hospitals (30km radius)</h5>
+            </div>
+            <div class="card-body">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="hospitalSearch" placeholder="Search hospitals...">
+                    <button class="btn btn-primary" type="button" onclick="findHospitals()">Search</button>
+                </div>
+                <div id="hospitalsList" class="list-group">
+                    <!-- Hospitals will be displayed here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Request Form Modal -->
+<div class="modal fade" id="requestModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Request Emergency Service</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="requestForm">
+                    <input type="hidden" id="hospitalId">
+                    <div class="mb-3">
+                        <label class="form-label">Patient Name</label>
+                        <input type="text" class="form-control" id="patientName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Emergency Type</label>
+                        <select class="form-select" id="emergencyType" required>
+                            <option value="">Select emergency type</option>
+                            <option value="accident">Accident</option>
+                            <option value="medical">Medical Emergency</option>
+                            <option value="trauma">Trauma</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" id="description" rows="3" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Contact Number</label>
+                        <input type="tel" class="form-control" id="contactNumber" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitRequest()">Submit Request</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Status Update Modal -->
+<div class="modal fade" id="statusModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Request Status</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="statusMessage"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Initialize Leaflet map -->
+<script>
+    var map = L.map('emergencyMap').setView([47.6062, -122.3321], 10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Custom icons for emergency services
+    var ambulanceIcon = L.icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41]
+    });
+
+    var policeIcon = L.icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41]
+    });
+
+    var fireIcon = L.icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41]
+    });
+</script>
+
+<!-- Emergency Services JavaScript -->
+<script>
+    function updateEmergencyServices() {
+        fetch('/api/emergency/services')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const services = data.services;
+                    
+                    // Clear existing markers
+                    map.eachLayer((layer) => {
+                        if (layer instanceof L.Marker) {
+                            map.removeLayer(layer);
+                        }
+                    });
+                    
+                    // Update emergency services table
+                    const tbody = document.getElementById('emergencyServices');
+                    tbody.innerHTML = '';
+                    
+                    services.forEach(service => {
+                        // Add marker to map
+                        let icon;
+                        switch(service.type) {
+                            case 'ambulance':
+                                icon = ambulanceIcon;
+                                break;
+                            case 'police':
+                                icon = policeIcon;
+                                break;
+                            case 'fire':
+                                icon = fireIcon;
+                                break;
+                            default:
+                                icon = ambulanceIcon;
+                        }
+                        
+                        L.marker([service.lat, service.lng], {icon: icon})
+                            .bindPopup(`
+                                <strong>${service.name}</strong><br>
+                                Type: ${service.type}<br>
+                                Distance: ${service.distance}km<br>
+                                Status: ${service.status}<br>
+                                Response Time: ${service.response_time}min
+                            `)
+                            .addTo(map);
+                        
+                        // Add row to table
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${service.name}</td>
+                            <td>${service.distance}km</td>
+                            <td><span class="badge bg-${getStatusColor(service.status)}">${service.status}</span></td>
+                            <td>${service.response_time}min</td>
+                            <td><a href="tel:${service.phone}" class="btn btn-sm btn-primary">Call</a></td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                    
+                    // Update active alerts
+                    const alertsDiv = document.getElementById('activeAlerts');
+                    alertsDiv.innerHTML = '';
+                    
+                    data.alerts.forEach(alert => {
+                        const alertItem = document.createElement('div');
+                        alertItem.className = 'list-group-item';
+                        alertItem.innerHTML = `
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">${alert.title}</h6>
+                                <small class="text-muted">${formatTime(alert.timestamp)}</small>
+                            </div>
+                            <p class="mb-1">${alert.description}</p>
+                        `;
+                        alertsDiv.appendChild(alertItem);
+                    });
+                }
+            })
+            .catch(error => console.error('Error updating emergency services:', error));
+    }
+
+    function getStatusColor(status) {
+        switch(status.toLowerCase()) {
+            case 'available':
+                return 'success';
+            case 'busy':
+                return 'warning';
+            case 'unavailable':
+                return 'danger';
+            default:
+                return 'secondary';
+        }
+    }
+
+    function formatTime(timestamp) {
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diff = now - date;
+        
+        if (diff < 60000) return 'Just now';
+        if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
+        if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
+        return date.toLocaleDateString();
+    }
+
+    function callEmergency(service) {
+        // In a real application, this would integrate with actual emergency services
+        alert(`Calling ${service}...\nThis is a simulation. In a real emergency, please call 911.`);
+    }
+
+    // Update emergency services every 30 seconds
+    setInterval(updateEmergencyServices, 30000);
+    updateEmergencyServices();  // Initial update
+</script>
+
+<script>
+function displayHospitals(hospitals) {
+    const hospitalsList = document.getElementById('hospitalsList');
+    hospitalsList.innerHTML = '';
+    
+    hospitals.forEach(hospital => {
+        const hospitalCard = document.createElement('div');
+        hospitalCard.className = 'list-group-item';
+        hospitalCard.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">${hospital.name}</h6>
+                    <p class="mb-1">${hospital.address}</p>
+                    <small>Distance: ${hospital.distance.toFixed(1)} km</small>
+                </div>
+                <div>
+                    <button class="btn btn-sm btn-primary me-2" onclick="showRequestForm('${hospital.id}')">
+                        Request Service
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="callHospital('${hospital.phone}')">
+                        Call
+                    </button>
+                </div>
+            </div>
+        `;
+        hospitalsList.appendChild(hospitalCard);
+    });
+}
+
+function showRequestForm(hospitalId) {
+    document.getElementById('hospitalId').value = hospitalId;
+    const requestModal = new bootstrap.Modal(document.getElementById('requestModal'));
+    requestModal.show();
+}
+
+function submitRequest() {
+    const requestData = {
+        hospital_id: document.getElementById('hospitalId').value,
+        patient_name: document.getElementById('patientName').value,
+        emergency_type: document.getElementById('emergencyType').value,
+        description: document.getElementById('description').value,
+        contact_number: document.getElementById('contactNumber').value
+    };
+
+    fetch('/api/emergency/request', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Close request modal
+            bootstrap.Modal.getInstance(document.getElementById('requestModal')).hide();
+            
+            // Show status modal
+            document.getElementById('statusMessage').innerHTML = `
+                <div class="alert alert-success">
+                    Your request has been submitted successfully. Request ID: ${data.request_id}
+                </div>
+                <p>You will be notified when the hospital accepts your request.</p>
+            `;
+            const statusModal = new bootstrap.Modal(document.getElementById('statusModal'));
+            statusModal.show();
+            
+            // Clear form
+            document.getElementById('requestForm').reset();
+        } else {
+            throw new Error(data.error);
+        }
+    })
+    .catch(error => {
+        document.getElementById('statusMessage').innerHTML = `
+            <div class="alert alert-danger">
+                Error submitting request: ${error.message}
+            </div>
+        `;
+        const statusModal = new bootstrap.Modal(document.getElementById('statusModal'));
+        statusModal.show();
+    });
+}
+</script>
+{% endblock %} 
